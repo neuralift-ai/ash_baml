@@ -133,12 +133,13 @@ defmodule AshBaml.Actions.CallBamlStream do
   end
 
   # Validates that a chunk has usable content for streaming.
-  # BAML sends partial chunks during progressive parsing where some fields may be nil.
-  # During streaming, fields might be nil while content is being built.
-  # We emit chunks as long as content has a value, since that's the primary field
-  # being streamed. Fields are typically only known when parsing completes.
+  # BAML sends partial chunks during progressive parsing where all fields may be nil.
+  # We only emit chunks where at least one field has a non-nil value.
   defp valid_chunk?(chunk) when is_struct(chunk) do
-    !is_nil(Map.get(chunk, :content))
+    chunk
+    |> Map.from_struct()
+    |> Map.values()
+    |> Enum.any?(&(not is_nil(&1)))
   end
 
   defp valid_chunk?(_chunk), do: true
