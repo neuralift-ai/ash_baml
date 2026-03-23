@@ -46,6 +46,7 @@ defmodule AshBaml.Actions.CallBamlFunction do
   end
 
   defp execute_baml_function(input, function_name, function_module, opts) do
+    {llm_client, arguments} = Map.pop(input.arguments, :llm_client)
     telemetry_config = build_telemetry_config(input.resource, opts)
 
     {result, collector} =
@@ -54,7 +55,12 @@ defmodule AshBaml.Actions.CallBamlFunction do
         function_name,
         telemetry_config,
         fn collector_opts ->
-          function_module.call(input.arguments, collector_opts)
+          collector_opts =
+            if llm_client,
+              do: Map.put(collector_opts, :llm_client, llm_client),
+              else: collector_opts
+
+          function_module.call(arguments, collector_opts)
         end
       )
 

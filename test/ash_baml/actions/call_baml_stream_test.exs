@@ -312,6 +312,47 @@ defmodule AshBaml.Actions.CallBamlStreamTest do
     end
   end
 
+  describe "llm_client forwarding" do
+    test "extracts llm_client from arguments and passes as opts to stream" do
+      defmodule StreamTrackingClient do
+        defmodule TrackingStreamFn do
+          def stream(args, callback, opts \\ %{}) do
+            send(self(), {:stream_opts, opts})
+            send(self(), {:stream_args, args})
+            callback.({:done, %{content: "done"}})
+            {:ok, self()}
+          end
+        end
+      end
+
+      defmodule StreamTrackingResource do
+        use Ash.Resource,
+          domain: nil,
+          extensions: [AshBaml.Resource]
+
+        baml do
+          client_module(StreamTrackingClient)
+        end
+      end
+
+      input = %{
+        resource: StreamTrackingResource,
+        arguments: %{prompt: "test", llm_client: "OPUS46"}
+      }
+
+      {:ok, stream} = CallBamlStream.run(input, [function: :TrackingStreamFn], %{})
+
+      # Consume the stream to trigger the call
+      _results = Enum.to_list(stream)
+
+      assert_received {:stream_opts, opts}
+      assert opts[:llm_client] == "OPUS46"
+
+      assert_received {:stream_args, args}
+      refute Map.has_key?(args, :llm_client)
+    end
+  end
+
   describe "valid_chunk?/1" do
     test "returns true for struct with non-nil content" do
       chunk = %{__struct__: TestStruct, content: "valid"}

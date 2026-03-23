@@ -56,16 +56,17 @@ defmodule AshBaml.Transformers.ImportBamlFunctionsTest do
       assert action = Enum.find(actions, &(&1.name == :test_function))
       assert action.type == :action
       assert action.returns == AshBaml.Test.BamlClient.Types.Reply
-      assert [argument] = action.arguments
-      assert argument.name == :message
+      assert argument = Enum.find(action.arguments, &(&1.name == :message))
       assert argument.type == Ash.Type.String
+      assert llm_client_arg = Enum.find(action.arguments, &(&1.name == :llm_client))
+      assert llm_client_arg.type == Ash.Type.String
+      assert llm_client_arg.allow_nil? == true
       assert action.description == "Auto-generated from BAML function TestFunction"
 
       assert stream_action = Enum.find(actions, &(&1.name == :test_function_stream))
       assert stream_action.type == :action
       assert stream_action.returns == AshBaml.Type.Stream
-      assert [stream_argument] = stream_action.arguments
-      assert stream_argument.name == :message
+      assert stream_argument = Enum.find(stream_action.arguments, &(&1.name == :message))
       assert stream_argument.type == Ash.Type.String
 
       assert stream_action.constraints[:element_type] == AshBaml.Test.BamlClient.Types.Reply
@@ -127,9 +128,8 @@ defmodule AshBaml.Transformers.ImportBamlFunctionsTest do
       actions = ResourceInfo.actions(TestResource)
       action = Enum.find(actions, &(&1.name == :test_function))
 
-      assert length(action.arguments) == 1
-      [arg] = action.arguments
-      assert arg.name == :message
+      assert length(action.arguments) == 2
+      arg = Enum.find(action.arguments, &(&1.name == :message))
       assert arg.type == Ash.Type.String
       assert arg.allow_nil? == false
     end

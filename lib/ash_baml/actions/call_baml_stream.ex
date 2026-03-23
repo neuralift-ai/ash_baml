@@ -28,7 +28,14 @@ defmodule AshBaml.Actions.CallBamlStream do
       function_module = Module.concat(client_module, function_name)
 
       if Code.ensure_loaded?(function_module) do
-        stream = create_stream(function_module, input.arguments)
+        {llm_client, arguments} = Map.pop(input.arguments, :llm_client)
+
+        stream_opts =
+          if llm_client,
+            do: %{llm_client: llm_client},
+            else: %{}
+
+        stream = create_stream(function_module, arguments, stream_opts)
         {:ok, stream}
       else
         Shared.build_module_not_found_error(
@@ -41,28 +48,32 @@ defmodule AshBaml.Actions.CallBamlStream do
     end
   end
 
-  defp create_stream(function_module, arguments) do
+  defp create_stream(function_module, arguments, opts) do
     Stream.resource(
-      fn -> start_streaming(function_module, arguments) end,
+      fn -> start_streaming(function_module, arguments, opts) end,
       fn state -> stream_next(state) end,
       fn state -> cleanup_stream(state) end
     )
   end
 
-  defp start_streaming(function_module, arguments) do
+  defp start_streaming(function_module, arguments, opts) do
     parent = self()
     ref = make_ref()
 
-    case function_module.stream(arguments, fn
-           {:partial, partial_result} ->
-             send(parent, {ref, :chunk, partial_result})
+    case function_module.stream(
+           arguments,
+           fn
+             {:partial, partial_result} ->
+               send(parent, {ref, :chunk, partial_result})
 
-           {:done, final_result} ->
-             send(parent, {ref, :done, {:ok, final_result}})
+             {:done, final_result} ->
+               send(parent, {ref, :done, {:ok, final_result}})
 
-           {:error, error} ->
-             send(parent, {ref, :done, {:error, error}})
-         end) do
+             {:error, error} ->
+               send(parent, {ref, :done, {:error, error}})
+           end,
+           opts
+         ) do
       {:ok, stream_pid} ->
         {ref, stream_pid, :streaming}
 
