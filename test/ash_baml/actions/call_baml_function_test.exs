@@ -252,6 +252,108 @@ defmodule AshBaml.Actions.CallBamlFunctionTest do
     end
   end
 
+  describe "llm_client forwarding" do
+    test "forwards llm_client from arguments to BamlElixir opts" do
+      defmodule LlmClientTrackingClient do
+        defmodule TrackingFn do
+          def call(args, opts \\ %{}) do
+            send(self(), {:call_opts, opts})
+            send(self(), {:call_args, args})
+            {:ok, %{result: "ok"}}
+          end
+        end
+      end
+
+      defmodule LlmClientTrackingResource do
+        use Ash.Resource,
+          domain: nil,
+          extensions: [AshBaml.Resource]
+
+        baml do
+          client_module(LlmClientTrackingClient)
+        end
+
+        import AshBaml.Helpers
+
+        actions do
+          action :test, :map do
+            argument(:message, :string, allow_nil?: false)
+            argument(:llm_client, :string, allow_nil?: true)
+            run(call_baml(:TrackingFn))
+          end
+        end
+      end
+
+      defmodule LlmClientTrackingDomain do
+        use Ash.Domain, validate_config_inclusion?: false
+
+        resources do
+          resource(LlmClientTrackingResource)
+        end
+      end
+
+      {:ok, _response} =
+        LlmClientTrackingResource
+        |> Ash.ActionInput.for_action(:test, %{message: "hello", llm_client: "OPUS46"},
+          domain: LlmClientTrackingDomain
+        )
+        |> Ash.run_action()
+
+      assert_received {:call_opts, opts}
+      assert opts[:llm_client] == "OPUS46"
+
+      assert_received {:call_args, args}
+      refute Map.has_key?(args, :llm_client)
+    end
+
+    test "does not include llm_client in opts when nil" do
+      defmodule LlmClientNilClient do
+        defmodule NilFn do
+          def call(_args, opts \\ %{}) do
+            send(self(), {:call_opts, opts})
+            {:ok, %{result: "ok"}}
+          end
+        end
+      end
+
+      defmodule LlmClientNilResource do
+        use Ash.Resource,
+          domain: nil,
+          extensions: [AshBaml.Resource]
+
+        baml do
+          client_module(LlmClientNilClient)
+        end
+
+        import AshBaml.Helpers
+
+        actions do
+          action :test, :map do
+            argument(:message, :string, allow_nil?: false)
+            argument(:llm_client, :string, allow_nil?: true)
+            run(call_baml(:NilFn))
+          end
+        end
+      end
+
+      defmodule LlmClientNilDomain do
+        use Ash.Domain, validate_config_inclusion?: false
+
+        resources do
+          resource(LlmClientNilResource)
+        end
+      end
+
+      {:ok, _response} =
+        LlmClientNilResource
+        |> Ash.ActionInput.for_action(:test, %{message: "hello"}, domain: LlmClientNilDomain)
+        |> Ash.run_action()
+
+      assert_received {:call_opts, opts}
+      refute Map.has_key?(opts, :llm_client)
+    end
+  end
+
   describe "telemetry configuration" do
     test "can disable telemetry for specific action" do
       defmodule TelemetryClient do
