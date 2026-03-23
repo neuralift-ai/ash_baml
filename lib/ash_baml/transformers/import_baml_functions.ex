@@ -158,6 +158,18 @@ defmodule AshBaml.Transformers.ImportBamlFunctions do
         )
       end)
 
+    llm_client_argument =
+      Transformer.build_entity!(
+        Ash.Resource.Dsl,
+        [:actions, :action],
+        :argument,
+        name: :llm_client,
+        type: Ash.Type.String,
+        allow_nil?: true
+      )
+
+    all_arguments = argument_entities ++ [llm_client_argument]
+
     implementation =
       case action_type do
         :regular -> {AshBaml.Actions.CallBamlFunction, [function: baml_function]}
@@ -175,7 +187,7 @@ defmodule AshBaml.Transformers.ImportBamlFunctions do
       name: name,
       type: :action,
       returns: return_type,
-      arguments: argument_entities,
+      arguments: all_arguments,
       run: implementation,
       constraints: constraints,
       description: "Auto-generated from BAML function #{baml_function}"
